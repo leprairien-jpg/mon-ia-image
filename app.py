@@ -1,38 +1,49 @@
 import streamlit as st
 import torch
-from diffusers import StableDiffusionImg2ImgPipeline
+from diffusers import AutoPipelineForImage2Image
 from PIL import Image
 
-# 1. Le Titre de notre Appli
-st.title("🎨 Mon Atelier d'Images Magiques")
-st.write("Mélange une photo et un texte pour créer du grand art !")
+st.set_page_config(page_title="Mon IA Magique", layout="centered")
 
-# 2. Configuration du Cerveau (On charge le modèle gratuit)
-@st.cache_resource # Pour ne pas recharger le cerveau à chaque fois
+st.title("🎨 Mon Atelier d'Images Rapide")
+
+@st.cache_resource
 def charger_modele():
-    model_id = "runwayml/stable-diffusion-v1-5"
-    # On utilise le processeur (CPU) car c'est gratuit sur les serveurs
-    pipe = StableDiffusionImg2ImgPipeline.from_pretrained(model_id, torch_dtype=torch.float32)
+    # On utilise un modèle "Fast" qui demande beaucoup moins de mémoire
+    model_id = "Lykon/dreamshaper-8-lcm" 
+    
+    # On charge le tuyau magique
+    pipe = AutoPipelineForImage2Image.from_pretrained(
+        model_id, 
+        torch_dtype=torch.float32,
+        safety_checker=None # On retire le capteur pour gagner de la place
+    )
     return pipe
 
-gen_pipe = charger_modele()
+# On lance le chargement
+try:
+    gen_pipe = charger_modele()
+except Exception as e:
+    st.error(f"Le serveur est un peu fatigué, réessaie dans 1 minute. Erreur : {e}")
 
-# 3. La zone de téléchargement
-photo_entree = st.file_uploader("Dépose ta photo ici", type=['png', 'jpg', 'jpeg'])
-prompt_texte = st.text_input("Que doit-on ajouter ou changer ? (en anglais)", "A fantasy oil painting style")
-puissance = st.slider("Force du changement (0 = pas de changement, 1 = tout nouveau)", 0.0, 1.0, 0.5)
+photo_entree = st.file_uploader("Choisis une photo", type=['png', 'jpg', 'jpeg'])
+prompt_texte = st.text_input("Ton sortilège (en anglais)", "Cyberpunk style, neon lights, high quality")
 
 if st.button("Lancer la Magie !"):
-    if photo_entree is not None:
-        # On prépare l'image
-        image = Image.open(photo_entree).convert("RGB")
-        image = image.resize((512, 512)) # On la taille pour que l'IA ne fatigue pas
+    if photo_entree and prompt_texte:
+        image = Image.open(photo_entree).convert("RGB").resize((512, 512))
         
-        with st.spinner("Le robot réfléchit..."):
-            # L'IA génère l'image
-            resultat = gen_pipe(prompt=prompt_texte, image=image, strength=puissance, guidance_scale=7.5).images[0]
+        with st.spinner("L'IA dessine..."):
+            # Pour ce modèle rapide, on utilise peu d'étapes (steps)
+            # Ça évite de faire chauffer le serveur gratuit
+            resultat = gen_pipe(
+                prompt=prompt_texte, 
+                image=image, 
+                strength=0.6, 
+                num_inference_steps=4, # Très rapide !
+                guidance_scale=1.0
+            ).images[0]
             
-            # On montre le résultat
-            st.image(resultat, caption="Tadam ! Voici ton image.")
+            st.image(resultat, caption="Résultat Magique")
     else:
-        st.error("N'oublie pas de mettre une photo !")
+        st.warning("Il manque la photo ou le texte !")
